@@ -26,7 +26,18 @@ export function createTargets(scene, effects, raycastables) {
     return targets.filter((t) => t.alive).length;
   }
 
-  return { update, targets, activeCount };
+  function setEnabled(enabled) {
+    for (const t of targets) {
+      t.group.visible = enabled;
+      for (const m of t.hitMeshes) {
+        const idx = raycastables.indexOf(m);
+        if (enabled && t.alive && idx < 0) raycastables.push(m);
+        if (!enabled && idx >= 0) raycastables.splice(idx, 1);
+      }
+    }
+  }
+
+  return { update, targets, activeCount, setEnabled };
 }
 
 function makeTarget(scene, effects, raycastables, pos, color) {
@@ -127,6 +138,7 @@ function makeTarget(scene, effects, raycastables, pos, color) {
     mesh: torso,
     group,
     color,
+    hitMeshes,
 
     hit(damage) {
       if (!this.alive) return;

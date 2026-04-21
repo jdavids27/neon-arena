@@ -113,16 +113,24 @@ net.on('welcome', (msg) => {
   if (Array.isArray(msg.players)) remotePlayers.applySnapshot(msg.players);
   scoreboardUi.setLocalId(msg.id || net.id);
   if (msg.scoreboard) scoreboardUi.render(msg.scoreboard);
+  targets.setEnabled(remotePlayers.size === 0);
   console.log('[net] welcome as', msg.name, '— others:', msg.players?.length ?? 0);
 });
 net.on('players', (msg) => {
   if (!Array.isArray(msg.list)) return;
   remotePlayers.applySnapshot(msg.list.filter((p) => p.id !== net.id));
+  targets.setEnabled(remotePlayers.size === 0);
 });
 net.on('player:join', (p) => {
-  if (p.id !== net.id) remotePlayers.upsert(p);
+  if (p.id !== net.id) {
+    remotePlayers.upsert(p);
+    targets.setEnabled(false);
+  }
 });
-net.on('player:leave', ({ id }) => remotePlayers.remove(id));
+net.on('player:leave', ({ id }) => {
+  remotePlayers.remove(id);
+  if (remotePlayers.size === 0) targets.setEnabled(true);
+});
 net.on('fire', (shot) => {
   renderRemoteFire(shot);
   if (!shot?.explosive && shot?.m) {
