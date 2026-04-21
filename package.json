@@ -1,0 +1,16 @@
+{
+  "name": "shooter",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "concurrently -n client,server -c cyan,magenta \"cd client && bun run dev\" \"cd server && bun run dev\"",
+    "dev:client": "cd client && bun run dev",
+    "dev:server": "cd server && bun run dev",
+    "build": "cd client && bun run build",
+    "start": "cd server && bun run start",
+    "install:all": "bun install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

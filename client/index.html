@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon Arena</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --neon-cyan: #38f9ff;
+        --neon-magenta: #ff3ad6;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #05060a;
+        color: #e8f7ff;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      #app { position: fixed; inset: 0; }
+      canvas { display: block; }
+
+      #crosshair {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 14px;
+        height: 14px;
+        margin-left: -7px;
+        margin-top: -7px;
+        pointer-events: none;
+        z-index: 5;
+        transition: transform 0.08s ease-out;
+      }
+      #crosshair::before,
+      #crosshair::after {
+        content: "";
+        position: absolute;
+        background: var(--neon-cyan);
+        box-shadow: 0 0 6px var(--neon-cyan);
+        transition: background 0.05s ease, box-shadow 0.05s ease;
+      }
+      #crosshair::before {
+        left: 6px; top: 0; width: 2px; height: 14px;
+      }
+      #crosshair::after {
+        top: 6px; left: 0; height: 2px; width: 14px;
+      }
+      #crosshair.hit { transform: scale(1.6); }
+      #crosshair.hit::before,
+      #crosshair.hit::after {
+        background: #ffffff;
+        box-shadow: 0 0 10px #ffffff;
+      }
+      #crosshair.kill::before,
+      #crosshair.kill::after {
+        background: var(--neon-magenta);
+        box-shadow: 0 0 12px var(--neon-magenta);
+      }
+
+      #ammo {
+        position: fixed;
+        right: 22px;
+        bottom: 18px;
+        font-size: 22px;
+        letter-spacing: 3px;
+        color: var(--neon-cyan);
+        text-shadow: 0 0 8px rgba(56,249,255,0.6);
+        z-index: 4;
+        pointer-events: none;
+      }
+      #reload {
+        position: fixed;
+        right: 22px;
+        bottom: 48px;
+        font-size: 11px;
+        letter-spacing: 4px;
+        color: var(--neon-magenta);
+        text-shadow: 0 0 8px rgba(255,58,214,0.6);
+        z-index: 4;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+      }
+      #reload.visible { opacity: 1; }
+
+      #weapon {
+        position: fixed;
+        right: 22px;
+        bottom: 68px;
+        font-size: 11px;
+        letter-spacing: 4px;
+        color: rgba(232, 247, 255, 0.8);
+        text-shadow: 0 0 6px rgba(56,249,255,0.5);
+        z-index: 4;
+        pointer-events: none;
+      }
+
+      #overlay {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(ellipse at center, rgba(56,249,255,0.12), rgba(5,6,10,0.92) 70%);
+        z-index: 10;
+        transition: opacity 0.3s ease;
+      }
+      #overlay.hidden { opacity: 0; pointer-events: none; }
+      .panel {
+        text-align: center;
+        padding: 28px 40px;
+        border: 1px solid rgba(56, 249, 255, 0.35);
+        border-radius: 6px;
+        background: rgba(5, 6, 10, 0.8);
+        box-shadow: 0 0 40px rgba(56, 249, 255, 0.15);
+      }
+      .panel h1 {
+        margin: 0 0 8px 0;
+        font-size: 36px;
+        letter-spacing: 6px;
+        color: var(--neon-cyan);
+        text-shadow: 0 0 10px rgba(56,249,255,0.6);
+      }
+      .panel p { margin: 4px 0; opacity: 0.8; }
+      .panel kbd {
+        display: inline-block;
+        padding: 2px 6px;
+        border: 1px solid rgba(56,249,255,0.4);
+        border-radius: 3px;
+        background: rgba(56,249,255,0.08);
+        color: var(--neon-cyan);
+        font-size: 12px;
+      }
+      .cta {
+        margin-top: 18px;
+        font-size: 14px;
+        color: var(--neon-magenta);
+        text-shadow: 0 0 8px rgba(255,58,214,0.6);
+      }
+
+      #hud {
+        position: fixed;
+        left: 16px;
+        bottom: 14px;
+        font-size: 12px;
+        color: rgba(232, 247, 255, 0.6);
+        z-index: 4;
+        pointer-events: none;
+      }
+
+      #scoreboard {
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        z-index: 8;
+        pointer-events: none;
+      }
+      #scoreboard .sb-panel {
+        min-width: 220px;
+        padding: 8px 12px 10px;
+        border: 1px solid rgba(56, 249, 255, 0.3);
+        border-radius: 4px;
+        background: rgba(5, 6, 10, 0.65);
+        box-shadow: 0 0 18px rgba(56, 249, 255, 0.12);
+        backdrop-filter: blur(2px);
+      }
+      #scoreboard h2 {
+        margin: 0 0 6px 0;
+        font-size: 10px;
+        letter-spacing: 4px;
+        color: var(--neon-cyan);
+        text-shadow: 0 0 6px rgba(56,249,255,0.5);
+      }
+      #scoreboard table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      #scoreboard th {
+        text-align: left;
+        padding: 2px 8px 2px 0;
+        border-bottom: 1px solid rgba(56, 249, 255, 0.2);
+        color: rgba(232, 247, 255, 0.5);
+        font-weight: 500;
+        font-size: 10px;
+        letter-spacing: 1.5px;
+      }
+      #scoreboard th.num, #scoreboard td.num { text-align: right; padding-right: 0; }
+      #scoreboard td {
+        padding: 2px 8px 2px 0;
+        color: #e8f7ff;
+      }
+      #scoreboard tr.me td {
+        color: var(--neon-magenta);
+        text-shadow: 0 0 6px rgba(255,58,214,0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="crosshair"></div>
+    <div id="ammo">20 / 20</div>
+    <div id="weapon">[1] RIFLE</div>
+    <div id="reload">RELOADING</div>
+    <div id="hud">NEON ARENA // PHASE 2</div>
+    <div id="scoreboard">
+      <div class="sb-panel">
+        <h2>SCOREBOARD</h2>
+        <table>
+          <thead>
+            <tr><th>Player</th><th class="num">Kills</th><th class="num">Deaths</th></tr>
+          </thead>
+          <tbody id="scoreboard-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="overlay">
+      <div class="panel">
+        <h1>NEON ARENA</h1>
+        <p><kbd>WASD</kbd> move &nbsp; <kbd>Space</kbd> jump &nbsp; <kbd>Shift</kbd> sprint</p>
+        <p><kbd>Mouse</kbd> look &nbsp; <kbd>LMB</kbd> fire &nbsp; <kbd>R</kbd> reload &nbsp; <kbd>Esc</kbd> release</p>
+        <p><kbd>1</kbd> rifle &nbsp; <kbd>2</kbd> rocket launcher (1-hit kill)</p>
+        <div class="cta">CLICK TO PLAY</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
