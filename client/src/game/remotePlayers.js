@@ -97,27 +97,71 @@ function makeRemote(scene, raycastables, info) {
 
   const bodyMat = new THREE.MeshStandardMaterial({
     color: 0x0a0f1a, roughness: 0.55, metalness: 0.3,
-    emissive: color, emissiveIntensity: 0.5,
+    emissive: color, emissiveIntensity: 0.45,
   });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.3, 6, 12), bodyMat);
-  body.position.y = 1.0;
+  const limbMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0f1a, roughness: 0.6, metalness: 0.25,
+    emissive: color, emissiveIntensity: 0.35,
+  });
+  const headMat = new THREE.MeshStandardMaterial({
+    color: 0x080a12, emissive: color, emissiveIntensity: 0.85,
+    roughness: 0.3, metalness: 0.5,
+  });
+
+  // Torso
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.75, 6, 12), bodyMat);
+  body.position.y = 1.35;
   group.add(body);
 
-  const head = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.32, 0),
-    new THREE.MeshStandardMaterial({
-      color: 0x080a12, emissive: color, emissiveIntensity: 0.85,
-      roughness: 0.3, metalness: 0.5,
-    }),
-  );
-  head.position.y = 2.0;
+  // Head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), headMat);
+  head.position.y = 2.02;
   group.add(head);
 
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(0.5, 0.035, 8, 24),
+  // Visor
+  const visor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.32, 0.08, 0.02),
     new THREE.MeshBasicMaterial({ color }),
   );
-  ring.position.y = 0.05;
+  visor.position.set(0, 2.04, 0.21);
+  group.add(visor);
+
+  // Arms
+  const leftArm = new THREE.Group();
+  leftArm.position.set(0.38, 1.72, 0);
+  const leftArmMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.6, 4, 8), limbMat);
+  leftArmMesh.position.y = -0.35;
+  leftArm.add(leftArmMesh);
+  group.add(leftArm);
+
+  const rightArm = new THREE.Group();
+  rightArm.position.set(-0.38, 1.72, 0);
+  const rightArmMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.6, 4, 8), limbMat);
+  rightArmMesh.position.y = -0.35;
+  rightArm.add(rightArmMesh);
+  group.add(rightArm);
+
+  // Legs
+  const leftLeg = new THREE.Group();
+  leftLeg.position.set(0.16, 0.9, 0);
+  const leftLegMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.7, 4, 8), limbMat);
+  leftLegMesh.position.y = -0.4;
+  leftLeg.add(leftLegMesh);
+  group.add(leftLeg);
+
+  const rightLeg = new THREE.Group();
+  rightLeg.position.set(-0.16, 0.9, 0);
+  const rightLegMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.7, 4, 8), limbMat);
+  rightLegMesh.position.y = -0.4;
+  rightLeg.add(rightLegMesh);
+  group.add(rightLeg);
+
+  // Ground ring
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.45, 0.03, 8, 24),
+    new THREE.MeshBasicMaterial({ color }),
+  );
+  ring.position.y = 0.04;
   ring.rotation.x = -Math.PI / 2;
   group.add(ring);
 
@@ -125,6 +169,7 @@ function makeRemote(scene, raycastables, info) {
   nameTag.position.y = 2.55;
   group.add(nameTag);
 
+  // Only torso + head are hittable
   raycastables.push(body);
   raycastables.push(head);
   body.userData.remoteId = info.id;
@@ -144,9 +189,8 @@ function makeRemote(scene, raycastables, info) {
       scene.remove(group);
       removeFromArray(raycastables, body);
       removeFromArray(raycastables, head);
-      body.geometry.dispose(); bodyMat.dispose();
-      head.geometry.dispose(); head.material.dispose();
-      ring.geometry.dispose(); ring.material.dispose();
+      for (const mat of [bodyMat, limbMat, headMat]) mat.dispose();
+      group.traverse((obj) => { if (obj.geometry) obj.geometry.dispose(); });
       nameTag.material.map.dispose();
       nameTag.material.dispose();
     },
