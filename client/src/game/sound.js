@@ -33,25 +33,92 @@ export function createSound() {
   function playFire(volume = 1) {
     const t = ctx.currentTime;
 
-    const noise = ctx.createBufferSource();
-    noise.buffer = getNoiseBuffer();
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 1600;
-    bp.Q.value = 0.6;
-    const g1 = envGain(t, 0.002, 0.09, 0.7 * volume);
-    noise.connect(bp).connect(g1).connect(master);
-    noise.start(t);
-    noise.stop(t + 0.12);
+    // Sharp crack — high-freq noise transient
+    const crack = ctx.createBufferSource();
+    crack.buffer = getNoiseBuffer();
+    const crackHp = ctx.createBiquadFilter();
+    crackHp.type = 'highpass';
+    crackHp.frequency.value = 3800;
+    const crackG = ctx.createGain();
+    crackG.gain.setValueAtTime(0, t);
+    crackG.gain.linearRampToValueAtTime(2.2 * volume, t + 0.0008);
+    crackG.gain.exponentialRampToValueAtTime(0.0001, t + 0.038);
+    crack.connect(crackHp).connect(crackG).connect(master);
+    crack.start(t);
+    crack.stop(t + 0.05);
 
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(220, t);
-    osc.frequency.exponentialRampToValueAtTime(60, t + 0.12);
-    const g2 = envGain(t, 0.001, 0.13, 0.45 * volume);
-    osc.connect(g2).connect(master);
-    osc.start(t);
-    osc.stop(t + 0.16);
+    // Mid-body noise burst
+    const body = ctx.createBufferSource();
+    body.buffer = getNoiseBuffer();
+    const bodyBp = ctx.createBiquadFilter();
+    bodyBp.type = 'bandpass';
+    bodyBp.frequency.value = 950;
+    bodyBp.Q.value = 0.7;
+    const bodyG = ctx.createGain();
+    bodyG.gain.setValueAtTime(0, t);
+    bodyG.gain.linearRampToValueAtTime(1.4 * volume, t + 0.002);
+    bodyG.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    body.connect(bodyBp).connect(bodyG).connect(master);
+    body.start(t);
+    body.stop(t + 0.13);
+
+    // Sub thump — sine sweep down
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(130, t);
+    sub.frequency.exponentialRampToValueAtTime(32, t + 0.16);
+    const subG = ctx.createGain();
+    subG.gain.setValueAtTime(0, t);
+    subG.gain.linearRampToValueAtTime(1.0 * volume, t + 0.003);
+    subG.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+    sub.connect(subG).connect(master);
+    sub.start(t);
+    sub.stop(t + 0.21);
+  }
+
+  function playRocketFire(volume = 1) {
+    const t = ctx.currentTime;
+
+    // Deep launch thump
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(90, t);
+    sub.frequency.exponentialRampToValueAtTime(22, t + 0.32);
+    const subG = ctx.createGain();
+    subG.gain.setValueAtTime(0, t);
+    subG.gain.linearRampToValueAtTime(1.1 * volume, t + 0.006);
+    subG.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+    sub.connect(subG).connect(master);
+    sub.start(t);
+    sub.stop(t + 0.4);
+
+    // Whoosh — low-pass noise sweep
+    const whoosh = ctx.createBufferSource();
+    whoosh.buffer = getNoiseBuffer();
+    const whooshLp = ctx.createBiquadFilter();
+    whooshLp.type = 'lowpass';
+    whooshLp.frequency.setValueAtTime(1200, t);
+    whooshLp.frequency.exponentialRampToValueAtTime(180, t + 0.38);
+    const whooshG = ctx.createGain();
+    whooshG.gain.setValueAtTime(0, t);
+    whooshG.gain.linearRampToValueAtTime(0.7 * volume, t + 0.01);
+    whooshG.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    whoosh.connect(whooshLp).connect(whooshG).connect(master);
+    whoosh.start(t);
+    whoosh.stop(t + 0.42);
+
+    // Mechanical clunk
+    const clunk = ctx.createOscillator();
+    clunk.type = 'square';
+    clunk.frequency.setValueAtTime(200, t);
+    clunk.frequency.exponentialRampToValueAtTime(55, t + 0.07);
+    const clunkG = ctx.createGain();
+    clunkG.gain.setValueAtTime(0, t);
+    clunkG.gain.linearRampToValueAtTime(0.5 * volume, t + 0.002);
+    clunkG.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    clunk.connect(clunkG).connect(master);
+    clunk.start(t);
+    clunk.stop(t + 0.1);
   }
 
   function playRemoteFire(distance = 10) {
@@ -179,6 +246,7 @@ export function createSound() {
   return {
     resume,
     playFire,
+    playRocketFire,
     playRemoteFire,
     playReload,
     playHit,

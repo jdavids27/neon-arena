@@ -15,8 +15,11 @@ export function createRocketLauncher({ camera, viewmodel, effects, hud, sound, s
   const stepVec = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
 
+  const RELOAD_TIME = 2.0;
+
   let ammo = MAX_AMMO;
   let cooldown = 0;
+  let reloading = 0;
   let firingHeld = false;
   let active = false;
   const rockets = [];
@@ -27,6 +30,15 @@ export function createRocketLauncher({ camera, viewmodel, effects, hud, sound, s
   window.addEventListener('mouseup', (e) => {
     if (e.button === 0) firingHeld = false;
   });
+  window.addEventListener('keydown', (e) => {
+    if (active && e.code === 'KeyR' && ammo < MAX_AMMO && reloading <= 0) startReload();
+  });
+
+  function startReload() {
+    reloading = RELOAD_TIME;
+    hud.setReloading(true);
+    sound?.playReload?.();
+  }
 
   function spawnRocket() {
     camera.getWorldPosition(origin);
@@ -34,7 +46,7 @@ export function createRocketLauncher({ camera, viewmodel, effects, hud, sound, s
 
     const muzzle = viewmodel.getMuzzleWorldPosition().clone();
     effects.spawnMuzzleFlash(muzzle);
-    sound?.playFire();
+    sound?.playRocketFire?.();
 
     const bodyMat = new THREE.MeshStandardMaterial({
       color: 0x2a0a0a,
@@ -102,6 +114,20 @@ export function createRocketLauncher({ camera, viewmodel, effects, hud, sound, s
     effects.spawnExplosion(hitPos, EXPLOSION_RADIUS);
     sound?.playExplosion();
 
+    // Damage AI targets within explosion radius (deduplicate by target object)
+    const hitTargets = new Set();
+    const objPos = new THREE.Vector3();
+    for (const obj of raycastables) {
+      const target = obj.userData.target;
+      if (!target || !target.alive || hitTargets.has(target)) continue;
+      obj.getWorldPosition(objPos);
+      if (objPos.distanceTo(hitPos) <= EXPLOSION_RADIUS) {
+        hitTargets.add(target);
+        target.hit(100);
+      }
+    }
+
+    // Find nearest remote player within explosion radius
     let hitId = directRemoteId;
     if (!hitId) {
       let minDist = Infinity;
@@ -176,7 +202,15 @@ export function createRocketLauncher({ camera, viewmodel, effects, hud, sound, s
 
   function update(dt, raycastables) {
     if (cooldown > 0) cooldown -= dt;
-    if (active && firingHeld && cooldown <= 0 && ammo > 0) fire();
+    if (reloading > 0) {
+      reloading -= dt;
+      if (reloading <= 0) {
+        ammo = MAX_AMMO;
+        hud.setAmmo(ammo, MAX_AMMO);
+        hud.setReloading(false);
+      }
+    }
+    if (active && firingHeld && cooldown <= 0 && ammo > 0 && reloading <= 0) fire();
 
     for (let i = rockets.length - 1; i >= 0; i--) {
       const r = rockets[i];
@@ -196,6 +230,8 @@ export function createRocketLauncher({ camera, viewmodel, effects, hud, sound, s
 
   function refill() {
     ammo = MAX_AMMO;
+    reloading = 0;
+    hud.setReloading(false);
     if (active) hud.setAmmo(ammo, MAX_AMMO);
   }
 
