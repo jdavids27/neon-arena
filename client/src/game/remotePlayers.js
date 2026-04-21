@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 const COLORS = [0x38f9ff, 0xff3ad6, 0x7a5bff, 0xffd23a, 0x5bffb0, 0xff7a3a];
-const LERP_RATE = 14;
+const INTERP_DELAY = 120; // ms — render this far behind latest received state
+const SNAP_DIST = 8;      // m  — teleport threshold (respawn, not movement)
 
 export function createRemotePlayers(scene, raycastables) {
   const byId = new Map();
@@ -12,9 +13,19 @@ export function createRemotePlayers(scene, raycastables) {
       r = makeRemote(scene, raycastables, info);
       byId.set(info.id, r);
     }
-    r.target.position.set(info.position.x, info.position.y, info.position.z);
-    r.target.yaw = info.yaw ?? 0;
-    r.target.pitch = info.pitch ?? 0;
+
+    const t = performance.now();
+    const x = info.position.x, y = info.position.y, z = info.position.z;
+
+    // If it's a big jump (respawn), wipe history so we don't interpolate across the map
+    const last = r.history[r.history.length - 1];
+    if (last) {
+      const dx = x - last.x, dy = y - last.y, dz = z - last.z;
+      if (Math.sqrt(dx*dx + dy*dy + dz*dz) > SNAP_DIST) r.history.length = 0;
+    }
+
+    r.history.push({ t, x, y, z, yaw: info.yaw ?? 0 });
+    if (r.history.length > 30) r.history.shift();
   }
 
   function remove(id) {
@@ -26,27 +37,43 @@ export function createRemotePlayers(scene, raycastables) {
 
   function applySnapshot(list) {
     const seen = new Set();
-    for (const info of list) {
-      upsert(info);
-      seen.add(info.id);
-    }
-    for (const id of byId.keys()) {
-      if (!seen.has(id)) remove(id);
-    }
+    for (const info of list) { upsert(info); seen.add(info.id); }
+    for (const id of byId.keys()) { if (!seen.has(id)) remove(id); }
   }
 
-  function getById(id) {
-    const r = byId.get(id);
-    return r || null;
-  }
+  function getById(id) { return byId.get(id) || null; }
 
   function update(dt) {
-    const k = 1 - Math.exp(-LERP_RATE * dt);
+    const renderTime = performance.now() - INTERP_DELAY;
+
     for (const r of byId.values()) {
-      r.current.position.lerp(r.target.position, k);
-      r.group.position.copy(r.current.position).setY(r.current.position.y - 1.7);
-      r.current.yaw = lerpAngle(r.current.yaw, r.target.yaw, k);
-      r.group.rotation.y = r.current.yaw;
+      const h = r.history;
+      if (h.length === 0) continue;
+
+      let x, y, z, yaw;
+
+      if (h.length === 1) {
+        ({ x, y, z, yaw } = h[0]);
+      } else {
+        // find the two samples that straddle renderTime
+        let a = h[0], b = h[1];
+        for (let i = 1; i < h.length; i++) {
+          if (h[i].t >= renderTime) { a = h[i - 1]; b = h[i]; break; }
+          // if we've exhausted the buffer, extrapolate from the last two
+          if (i === h.length - 1) { a = h[i - 1]; b = h[i]; }
+        }
+
+        const span = b.t - a.t;
+        const alpha = span > 0 ? Math.min(1.5, (renderTime - a.t) / span) : 1;
+        x = a.x + (b.x - a.x) * alpha;
+        y = a.y + (b.y - a.y) * alpha;
+        z = a.z + (b.z - a.z) * alpha;
+        yaw = lerpAngle(a.yaw, b.yaw, Math.min(1, alpha));
+      }
+
+      r.current.position.set(x, y, z);
+      r.group.position.set(x, y - 1.7, z);
+      r.group.rotation.y = yaw;
     }
   }
 
@@ -69,11 +96,8 @@ function makeRemote(scene, raycastables, info) {
   scene.add(group);
 
   const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0f1a,
-    roughness: 0.55,
-    metalness: 0.3,
-    emissive: color,
-    emissiveIntensity: 0.5,
+    color: 0x0a0f1a, roughness: 0.55, metalness: 0.3,
+    emissive: color, emissiveIntensity: 0.5,
   });
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.3, 6, 12), bodyMat);
   body.position.y = 1.0;
@@ -82,11 +106,8 @@ function makeRemote(scene, raycastables, info) {
   const head = new THREE.Mesh(
     new THREE.IcosahedronGeometry(0.32, 0),
     new THREE.MeshStandardMaterial({
-      color: 0x080a12,
-      emissive: color,
-      emissiveIntensity: 0.85,
-      roughness: 0.3,
-      metalness: 0.5,
+      color: 0x080a12, emissive: color, emissiveIntensity: 0.85,
+      roughness: 0.3, metalness: 0.5,
     }),
   );
   head.position.y = 2.0;
@@ -109,13 +130,16 @@ function makeRemote(scene, raycastables, info) {
   body.userData.remoteId = info.id;
   head.userData.remoteId = info.id;
 
-  const current = { position: new THREE.Vector3(info.position.x, info.position.y, info.position.z), yaw: info.yaw ?? 0 };
-  const target = { position: new THREE.Vector3(info.position.x, info.position.y, info.position.z), yaw: info.yaw ?? 0, pitch: 0 };
-  group.position.copy(current.position).setY(current.position.y - 1.7);
+  const initPos = info.position
+    ? new THREE.Vector3(info.position.x, info.position.y, info.position.z)
+    : new THREE.Vector3();
+
+  group.position.copy(initPos).setY(initPos.y - 1.7);
 
   return {
     group, body, head, ring, nameTag, color,
-    current, target,
+    history: [],
+    current: { position: initPos.clone() },
     dispose() {
       scene.remove(group);
       removeFromArray(raycastables, body);
@@ -131,8 +155,7 @@ function makeRemote(scene, raycastables, info) {
 
 function makeNameSprite(name, color) {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
+  canvas.width = 256; canvas.height = 64;
   const ctx = canvas.getContext('2d');
   ctx.font = '600 32px ui-monospace, Menlo, monospace';
   ctx.textAlign = 'center';
@@ -141,7 +164,6 @@ function makeNameSprite(name, color) {
   ctx.shadowColor = ctx.fillStyle;
   ctx.shadowBlur = 14;
   ctx.fillText(name, canvas.width / 2, canvas.height / 2);
-
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });

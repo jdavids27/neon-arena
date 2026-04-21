@@ -143,7 +143,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const SNAPSHOT_INTERVAL = 1000 / 15;
+const SNAPSHOT_INTERVAL = 1000 / 20;
 setInterval(() => {
   if (players.size === 0) return;
   io.emit('players', { list: playerSnapshot() });
