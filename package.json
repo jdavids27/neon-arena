@@ -6,8 +6,8 @@
     "dev": "concurrently -n client,server -c cyan,magenta \"cd client && bun run dev\" \"cd server && bun run dev\"",
     "dev:client": "cd client && bun run dev",
     "dev:server": "cd server && bun run dev",
-    "build": "cd client && bun run build",
-    "start": "cd server && bun run start",
+    "build": "npm install --prefix client && npx --prefix client vite build && npm install --prefix server",
+    "start": "node server/src/index.js",
     "install:all": "bun install"
   },
   "devDependencies": {
